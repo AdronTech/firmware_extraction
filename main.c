@@ -18,6 +18,9 @@ static const uint32_t UART_CR1 = UART + 0x0C; // UART control register 1
 static const uint32_t UART_CR2 = UART + 0x10; // UART control register 2
 static const uint32_t UART_CR3 = UART + 0x14; // UART control register 3
 
+static const uint32_t FLASH_START = 0x08000000; // FLASH start address
+static const uint32_t FLASH_SIZE = 0x00010000;  // FLASH size (64 KB)
+
 void main(void)
 {
     // enable GPIO clock
@@ -61,6 +64,35 @@ void main(void)
 
             // send character
             *(volatile uint32_t *)UART_DR = *p;
+        }
+
+        // dump flash memory
+        for (uint32_t addr = FLASH_START; addr < FLASH_START + FLASH_SIZE; addr += 4)
+        {
+            // wait until TXE (transmit data register empty) is set
+            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+                ;
+
+            // send address
+            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 24) & 0xFF;
+
+            // wait until TXE (transmit data register empty) is set
+            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+                ;
+
+            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 16) & 0xFF;
+
+            // wait until TXE (transmit data register empty) is set
+            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+                ;
+
+            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 8) & 0xFF;
+
+            // wait until TXE (transmit data register empty) is set
+            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+                ;
+
+            *(volatile uint32_t *)UART_DR = (*(uint32_t *)addr) & 0xFF;
         }
 
         // delay
