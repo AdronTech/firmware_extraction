@@ -21,34 +21,60 @@ static const uint32_t UART_CR3 = UART + 0x14; // UART control register 3
 static const uint32_t FLASH_START = 0x08000000; // FLASH start address
 static const uint32_t FLASH_SIZE = 0x00010000;  // FLASH size (64 KB)
 
-void main(void)
+void init_led(void)
 {
     // enable GPIO clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 2);  // enable GPIOA clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 4);  // enable GPIOC clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 14); // enable UART clock
+    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 2); // enable GPIOA clock
 
     // define LED pin as output
     *(volatile uint32_t *)(GPIOC_CRH) = (*(uint32_t *)GPIOC_CRH & ~(0xF << 20)) | (0b10 << 20) | (0b00 << 22);
+}
 
-    // configure UART
+void toggle_led(void)
+{
+    *(volatile uint32_t *)GPIOC_ODR ^= (1 << 13); // toggle PC13
+}
+
+void init_uart(void)
+{
+    // enable UART clock
+    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 14); // enable UART clock
+    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 4);  // enable GPIOC clock
+
     // configure pins for UART TX and RX to alternate function
     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 4)) | (0b10 << 4) | (0b10 << 6);  // PA9 (TX) as alternate function push-pull
     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 8)) | (0b10 << 8) | (0b11 << 10); // PA10 (RX) as input floating
+
     // enable UART
     *(volatile uint32_t *)UART_CR1 = 0;          // reset control register 1
     *(volatile uint32_t *)UART_CR1 |= (1 << 13); // UE (USART enable)
+
     // configure baud rate
     // baud = f_clock / (16 * (USARTDIV))
     // for 9600 baud with 8 MHz clock
     // USARTDIV = 8 MHz / (16 * 9600) = 52.0833
     // 0.0833 * 16 = 1.3333
     *(volatile uint32_t *)UART_BRR = 52 << 4 | 1;
+}
+
+void send_byte_sync(uint8_t byte)
+{
+    // wait until TXE (transmit data register empty) is set
+    while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+        ;
+
+    // send byte
+    *(volatile uint32_t *)UART_DR = byte;
+}
+
+void main(void)
+{
+    init_led();
+    init_uart();
 
     while (1)
     {
-        // toggle LED
-        *(volatile uint32_t *)GPIOC_ODR ^= (1 << 13); // toggle PC13
+        toggle_led();
 
         // for each character in "hello world"
         const char *message = "hello world\n";
@@ -58,41 +84,16 @@ void main(void)
 
         for (const char *p = message; *p != '\0'; p++)
         {
-            // wait until TXE (transmit data register empty) is set
-            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-                ;
-
-            // send character
-            *(volatile uint32_t *)UART_DR = *p;
+            send_byte_sync(*p); // send character
         }
 
         // dump flash memory
         for (uint32_t addr = FLASH_START; addr < FLASH_START + FLASH_SIZE; addr += 4)
         {
-            // wait until TXE (transmit data register empty) is set
-            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-                ;
-
-            // send address
-            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 24) & 0xFF;
-
-            // wait until TXE (transmit data register empty) is set
-            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-                ;
-
-            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 16) & 0xFF;
-
-            // wait until TXE (transmit data register empty) is set
-            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-                ;
-
-            *(volatile uint32_t *)UART_DR = ((*(uint32_t *)addr) >> 8) & 0xFF;
-
-            // wait until TXE (transmit data register empty) is set
-            while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-                ;
-
-            *(volatile uint32_t *)UART_DR = (*(uint32_t *)addr) & 0xFF;
+            send_byte_sync((*((uint32_t *)addr) >> 24) & 0xFF); // MSB
+            send_byte_sync((*((uint32_t *)addr) >> 16) & 0xFF);
+            send_byte_sync((*((uint32_t *)addr) >> 8) & 0xFF);
+            send_byte_sync((*((uint32_t *)addr)) & 0xFF); // LSB
         }
 
         // delay
