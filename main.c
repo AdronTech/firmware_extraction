@@ -1,22 +1,27 @@
 #include <stdint.h>
 
-static const uint32_t RCC = 0x40021000;         // RCC base address
-static const uint32_t RCC_APB2ENR = RCC + 0x14; // RCC APB2 peripheral clock enable register
+static const uint32_t RCC = 0x40021000;        // RCC base address
+static const uint32_t RCC_AHBEN = RCC + 0x14;  // RCC AHB enable register
+static const uint32_t RCC_APB1EN = RCC + 0x1C; // RCC APB2 enable register
 
-static const uint32_t GPIOA = 0x40010800;       // GPIOA base address
-static const uint32_t GPIOA_CRH = GPIOA + 0x04; // GPIOA configuration register high
+static const uint32_t GPIOA = 0x48000000;          // GPIOA base address
+static const uint32_t GPIOA_CTL = GPIOA + 0x00;    // GPIOA configuration register high
+static const uint32_t GPIOA_ODR = GPIOA + 0x14;    // GPIOA output data register
+static const uint32_t GPIOA_AFSEL0 = GPIOA + 0x20; // GPIOA alternate function low register
 
-static const uint32_t GPIOC = 0x48000000;       // GPIOC base address
-static const uint32_t GPIOC_CTL = GPIOC;        // GPIOC configuration register high
-static const uint32_t GPIOC_ODR = GPIOC + 0x14; // GPIOC output data register
-
-static const uint32_t UART = 0x40013800;      // UART base address
-static const uint32_t UART_SR = UART + 0x00;  // UART status register
-static const uint32_t UART_DR = UART + 0x04;  // UART data register
-static const uint32_t UART_BRR = UART + 0x08; // UART baud rate register
-static const uint32_t UART_CR1 = UART + 0x0C; // UART control register 1
-static const uint32_t UART_CR2 = UART + 0x10; // UART control register 2
-static const uint32_t UART_CR3 = UART + 0x14; // UART control register 3
+static const uint32_t UART = 0x40004400; // UART base address
+// static const uint32_t UART_SR = UART + 0x00;  // UART status register
+// static const uint32_t UART_DR = UART + 0x04;  // UART data register
+// static const uint32_t UART_BRR = UART + 0x08; // UART baud rate register
+// static const uint32_t UART_CR1 = UART + 0x0C; // UART control register 1
+// static const uint32_t UART_CR2 = UART + 0x10; // UART control register 2
+// static const uint32_t UART_CR3 = UART + 0x14; // UART control register 3
+static const uint32_t USART_CTL0 = UART + 0x00;  // UART control register 0
+static const uint32_t USART_CTL1 = UART + 0x04;  // UART control register 1
+static const uint32_t USART_CTL2 = UART + 0x08;  // UART control register 2
+static const uint32_t USART_BAUD = UART + 0x0C;  // UART baud rate register
+static const uint32_t USART_STAT = UART + 0x1C;  // UART status register
+static const uint32_t USART_TDATA = UART + 0x28; // UART data register
 
 static const uint32_t FLASH_START = 0x08000000; // FLASH start address
 static const uint32_t FLASH_SIZE = 0x00010000;  // FLASH size (64 KB)
@@ -24,69 +29,67 @@ static const uint32_t FLASH_SIZE = 0x00010000;  // FLASH size (64 KB)
 void init_led(void)
 {
     // enable GPIO clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 17); // enable GPIOA clock
+    *(volatile uint32_t *)RCC_AHBEN |= (1 << 17); // enable GPIOA clock
 
     // define LED pin as output
-    // *(volatile uint32_t *)(GPIOC_CRH) = (*(uint32_t *)GPIOC_CRH & ~(0xF << 20)) | (0b10 << 20) | (0b00 << 22);
-    *(volatile uint32_t *)(GPIOC_CTL) |= (0b01 << 4); // PC2 as output push-pull
+    *(volatile uint32_t *)(GPIOA_CTL) |= (0b01 << 4); // PA2 as output push-pull
 }
 
 void toggle_led(void)
 {
-    *(volatile uint32_t *)GPIOC_ODR ^= (1 << 2); // toggle PA2
+    *(volatile uint32_t *)GPIOA_ODR ^= (1 << 2); // toggle PA2
 }
 
-// void init_uart(void)
-// {
-//     // enable UART clock
-//     *(volatile uint32_t *)RCC_APB2ENR |= (1 << 14); // enable UART clock
-//     *(volatile uint32_t *)RCC_APB2ENR |= (1 << 4);  // enable GPIOC clock
+void init_uart(void)
+{
+    // enable UART clock
+    *(volatile uint32_t *)RCC_APB1EN |= (1 << 17); // enable UART clock
 
-//     // configure pins for UART TX and RX to alternate function
-//     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 4)) | (0b10 << 4) | (0b10 << 6);  // PA9 (TX) as alternate function push-pull
-//     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 8)) | (0b10 << 8) | (0b11 << 10); // PA10 (RX) as input floating
+    // configure pins for UART TX and RX to alternate function
+    *(volatile uint32_t *)RCC_AHBEN |= (1 << 17);          // enable GPIOA clock
+    *(volatile uint32_t *)(GPIOA_CTL) |= (0b10 << 4);      // PA2 (TX) as alternate function
+    *(volatile uint32_t *)(GPIOA_AFSEL0) |= (0b0001 << 8); // PA2 alternate function 1 (USART1)
 
-//     // enable UART
-//     *(volatile uint32_t *)UART_CR1 = 0;          // reset control register 1
-//     *(volatile uint32_t *)UART_CR1 |= (1 << 13); // UE (USART enable)
+    // configure baud rate
+    // baud = f_clock / (16 * (USARTDIV))
+    // for 250.000 baud with 8 MHz clock
+    // USARTDIV = 8 MHz / (16 * 250.000) = 2
+    // 0 * 16 = 0
+    *(volatile uint32_t *)USART_BAUD = 2 << 4 | 0;
 
-//     // configure baud rate
-//     // baud = f_clock / (16 * (USARTDIV))
-//     // for 250.000 baud with 8 MHz clock
-//     // USARTDIV = 8 MHz / (16 * 250.000) = 2
-//     // 0 * 16 = 0
-//     *(volatile uint32_t *)UART_BRR = 2 << 4 | 0;
-// }
+    // enable UART
+    *(volatile uint32_t *)USART_CTL0 |= (1 << 0); // UE (USART enable)
+}
 
-// void send_byte_sync(uint8_t byte)
-// {
-//     // wait until TXE (transmit data register empty) is set
-//     while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-//         ;
+void send_byte_sync(uint8_t byte)
+{
+    // wait until TXE (transmit data register empty) is set
+    while (!(*(volatile uint32_t *)USART_STAT & (1 << 7)))
+        ;
 
-//     // send byte
-//     *(volatile uint32_t *)UART_DR = byte;
-// }
+    // send byte
+    *(volatile uint32_t *)USART_TDATA = byte;
+}
 
 void main(void)
 {
-    init_led();
-    // init_uart();
+    // init_led();
+    init_uart();
 
     while (1)
     {
-        toggle_led();
+        // toggle_led();
 
-        // // for each character in "hello world"
-        // const char *message = "hello world\n";
+        // for each character in "hello world"
+        const char *message = "hello world\n";
 
-        // // enable UART transmitter
-        // *(volatile uint32_t *)UART_CR1 |= (1 << 3); // TE (transmitter enable)
+        // enable UART transmitter
+        *(volatile uint32_t *)USART_CTL0 |= (1 << 3); // TE (transmitter enable)
 
-        // for (const char *p = message; *p != '\0'; p++)
-        // {
-        //     send_byte_sync(*p); // send character
-        // }
+        for (const char *p = message; *p != '\0'; p++)
+        {
+            send_byte_sync(*p); // send character
+        }
 
         // // dump flash memory
         // for (uint32_t addr = FLASH_START; addr < FLASH_START + FLASH_SIZE; addr += 4)
