@@ -38,4 +38,6 @@ SECTIONS {
         . = ALIGN(4);
         _ebss = .;
     } > SRAM
+
+    _eram = ORIGIN(SRAM) + LENGTH(SRAM);
 }

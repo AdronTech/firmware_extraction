@@ -1,5 +1,5 @@
 MEMORY {
-    SRAM  (rwx) : ORIGIN = 0x20000000, LENGTH = 20K
+    SRAM  (rwx) : ORIGIN = 0x20000000, LENGTH = 8K
 }
 
 SECTIONS {
@@ -37,4 +37,6 @@ SECTIONS {
         . = ALIGN(4);
         _ebss = .;
     } > SRAM
+
+    _eram = ORIGIN(SRAM) + LENGTH(SRAM);
 }

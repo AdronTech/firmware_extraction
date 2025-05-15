@@ -1,14 +1,14 @@
 #include <stdint.h>
 
 static const uint32_t RCC = 0x40021000;         // RCC base address
-static const uint32_t RCC_APB2ENR = RCC + 0x18; // RCC APB2 peripheral clock enable register
+static const uint32_t RCC_APB2ENR = RCC + 0x14; // RCC APB2 peripheral clock enable register
 
 static const uint32_t GPIOA = 0x40010800;       // GPIOA base address
 static const uint32_t GPIOA_CRH = GPIOA + 0x04; // GPIOA configuration register high
 
-static const uint32_t GPIOC = 0x40011000;       // GPIOC base address
-static const uint32_t GPIOC_CRH = GPIOC + 0x04; // GPIOC configuration register high
-static const uint32_t GPIOC_ODR = GPIOC + 0x0C; // GPIOC output data register
+static const uint32_t GPIOC = 0x48000000;       // GPIOC base address
+static const uint32_t GPIOC_CTL = GPIOC;        // GPIOC configuration register high
+static const uint32_t GPIOC_ODR = GPIOC + 0x14; // GPIOC output data register
 
 static const uint32_t UART = 0x40013800;      // UART base address
 static const uint32_t UART_SR = UART + 0x00;  // UART status register
@@ -24,80 +24,81 @@ static const uint32_t FLASH_SIZE = 0x00010000;  // FLASH size (64 KB)
 void init_led(void)
 {
     // enable GPIO clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 2); // enable GPIOA clock
+    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 17); // enable GPIOA clock
 
     // define LED pin as output
-    *(volatile uint32_t *)(GPIOC_CRH) = (*(uint32_t *)GPIOC_CRH & ~(0xF << 20)) | (0b10 << 20) | (0b00 << 22);
+    // *(volatile uint32_t *)(GPIOC_CRH) = (*(uint32_t *)GPIOC_CRH & ~(0xF << 20)) | (0b10 << 20) | (0b00 << 22);
+    *(volatile uint32_t *)(GPIOC_CTL) |= (0b01 << 4); // PC2 as output push-pull
 }
 
 void toggle_led(void)
 {
-    *(volatile uint32_t *)GPIOC_ODR ^= (1 << 13); // toggle PC13
+    *(volatile uint32_t *)GPIOC_ODR ^= (1 << 2); // toggle PA2
 }
 
-void init_uart(void)
-{
-    // enable UART clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 14); // enable UART clock
-    *(volatile uint32_t *)RCC_APB2ENR |= (1 << 4);  // enable GPIOC clock
+// void init_uart(void)
+// {
+//     // enable UART clock
+//     *(volatile uint32_t *)RCC_APB2ENR |= (1 << 14); // enable UART clock
+//     *(volatile uint32_t *)RCC_APB2ENR |= (1 << 4);  // enable GPIOC clock
 
-    // configure pins for UART TX and RX to alternate function
-    *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 4)) | (0b10 << 4) | (0b10 << 6);  // PA9 (TX) as alternate function push-pull
-    *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 8)) | (0b10 << 8) | (0b11 << 10); // PA10 (RX) as input floating
+//     // configure pins for UART TX and RX to alternate function
+//     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 4)) | (0b10 << 4) | (0b10 << 6);  // PA9 (TX) as alternate function push-pull
+//     *(volatile uint32_t *)(GPIOA_CRH) = (*(uint32_t *)GPIOA_CRH & ~(0xF << 8)) | (0b10 << 8) | (0b11 << 10); // PA10 (RX) as input floating
 
-    // enable UART
-    *(volatile uint32_t *)UART_CR1 = 0;          // reset control register 1
-    *(volatile uint32_t *)UART_CR1 |= (1 << 13); // UE (USART enable)
+//     // enable UART
+//     *(volatile uint32_t *)UART_CR1 = 0;          // reset control register 1
+//     *(volatile uint32_t *)UART_CR1 |= (1 << 13); // UE (USART enable)
 
-    // configure baud rate
-    // baud = f_clock / (16 * (USARTDIV))
-    // for 9600 baud with 8 MHz clock
-    // USARTDIV = 8 MHz / (16 * 9600) = 52.0833
-    // 0.0833 * 16 = 1.3333
-    *(volatile uint32_t *)UART_BRR = 52 << 4 | 1;
-}
+//     // configure baud rate
+//     // baud = f_clock / (16 * (USARTDIV))
+//     // for 250.000 baud with 8 MHz clock
+//     // USARTDIV = 8 MHz / (16 * 250.000) = 2
+//     // 0 * 16 = 0
+//     *(volatile uint32_t *)UART_BRR = 2 << 4 | 0;
+// }
 
-void send_byte_sync(uint8_t byte)
-{
-    // wait until TXE (transmit data register empty) is set
-    while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
-        ;
+// void send_byte_sync(uint8_t byte)
+// {
+//     // wait until TXE (transmit data register empty) is set
+//     while (!(*(volatile uint32_t *)UART_SR & (1 << 7)))
+//         ;
 
-    // send byte
-    *(volatile uint32_t *)UART_DR = byte;
-}
+//     // send byte
+//     *(volatile uint32_t *)UART_DR = byte;
+// }
 
 void main(void)
 {
     init_led();
-    init_uart();
+    // init_uart();
 
     while (1)
     {
         toggle_led();
 
-        // for each character in "hello world"
-        const char *message = "hello world\n";
+        // // for each character in "hello world"
+        // const char *message = "hello world\n";
 
-        // enable UART transmitter
-        *(volatile uint32_t *)UART_CR1 |= (1 << 3); // TE (transmitter enable)
+        // // enable UART transmitter
+        // *(volatile uint32_t *)UART_CR1 |= (1 << 3); // TE (transmitter enable)
 
-        for (const char *p = message; *p != '\0'; p++)
-        {
-            send_byte_sync(*p); // send character
-        }
+        // for (const char *p = message; *p != '\0'; p++)
+        // {
+        //     send_byte_sync(*p); // send character
+        // }
 
-        // dump flash memory
-        for (uint32_t addr = FLASH_START; addr < FLASH_START + FLASH_SIZE; addr += 4)
-        {
-            send_byte_sync((*((uint32_t *)addr) >> 24) & 0xFF); // MSB
-            send_byte_sync((*((uint32_t *)addr) >> 16) & 0xFF);
-            send_byte_sync((*((uint32_t *)addr) >> 8) & 0xFF);
-            send_byte_sync((*((uint32_t *)addr)) & 0xFF); // LSB
-        }
+        // // dump flash memory
+        // for (uint32_t addr = FLASH_START; addr < FLASH_START + FLASH_SIZE; addr += 4)
+        // {
+        //     send_byte_sync((*((uint32_t *)addr) >> 24) & 0xFF); // MSB
+        //     send_byte_sync((*((uint32_t *)addr) >> 16) & 0xFF);
+        //     send_byte_sync((*((uint32_t *)addr) >> 8) & 0xFF);
+        //     send_byte_sync((*((uint32_t *)addr)) & 0xFF); // LSB
+        // }
 
         // delay
-        for (volatile int i = 0; i < 1000000; i++)
+        for (volatile int i = 0; i < 100000; i++)
         {
             // simple delay loop
             __asm__ volatile("nop");
@@ -105,12 +106,12 @@ void main(void)
     }
 }
 
-static const uint32_t _eram = 0x20004FFF; // end of RAM
-extern uint32_t _sdata;                   // start of initialized data
-extern uint32_t _edata;                   // end of initialized data
-extern uint32_t _sbss;                    // start of uninitialized data
-extern uint32_t _ebss;                    // end of uninitialized data
-extern uint32_t _etext;                   // end of text section
+extern uint32_t _eram;  // end of RAM
+extern uint32_t _sdata; // start of initialized data
+extern uint32_t _edata; // end of initialized data
+extern uint32_t _sbss;  // start of uninitialized data
+extern uint32_t _ebss;  // end of uninitialized data
+extern uint32_t _etext; // end of text section
 
 void reset_handler(void)
 {
@@ -136,6 +137,6 @@ void reset_handler(void)
 }
 
 uint32_t vector_table[128] __attribute__((section(".isr_vector"))) = {
-    _eram,                   // initial stack pointer
+    (uint32_t)&_eram,        // initial stack pointer
     (uint32_t)reset_handler, // reset handler
 };
